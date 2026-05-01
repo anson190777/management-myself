@@ -5,7 +5,7 @@ import RevenuePage from './pages/RevenuePage';
 import RoomBillsPage from './pages/RoomBillsPage';
 import RoomsPage from './pages/RoomsPage';
 
-function App() {
+export default function App() {
   return (
     <Routes>
       <Route path="/" element={<DashboardLayout />}>
@@ -19,5 +19,3 @@ function App() {
     </Routes>
   );
 }
-
-export default App;

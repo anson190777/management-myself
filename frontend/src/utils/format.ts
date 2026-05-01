@@ -1,4 +1,4 @@
-export const formatCurrencyVnd = (value = 0) =>
+export const formatCurrencyVnd = (value = 0): string =>
   new Intl.NumberFormat('vi-VN', {
     style: 'currency',
     currency: 'VND',

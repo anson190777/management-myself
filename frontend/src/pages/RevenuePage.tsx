@@ -1,6 +1,6 @@
 import { Card, Typography } from 'antd';
 
-function RevenuePage() {
+export default function RevenuePage() {
   return (
     <Card>
       <Typography.Title level={4}>Doanh thu</Typography.Title>
@@ -10,5 +10,3 @@ function RevenuePage() {
     </Card>
   );
 }
-
-export default RevenuePage;

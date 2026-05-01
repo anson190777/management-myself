@@ -13,14 +13,14 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 const { Header, Sider, Content } = Layout;
 
-const routeTitleMap = {
+const routeTitleMap: Record<string, string> = {
   '/house/rooms': 'House / Rooms',
   '/house/room-bills': 'House / Room Bills',
   '/profile/account-banks': 'Profile / Account Banks',
   '/revenue': 'Doanh thu',
 };
 
-function DashboardLayout() {
+export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -84,7 +84,7 @@ function DashboardLayout() {
               selectedKeys={[location.pathname]}
               defaultOpenKeys={['house']}
               items={mainMenuItems}
-              onClick={({ key }) => navigate(key)}
+              onClick={({ key }) => navigate(String(key))}
             />
           </div>
           <Menu
@@ -93,7 +93,7 @@ function DashboardLayout() {
             selectedKeys={[location.pathname]}
             defaultOpenKeys={['profile']}
             items={profileMenuItems}
-            onClick={({ key }) => navigate(key)}
+            onClick={({ key }) => navigate(String(key))}
           />
         </div>
       </Sider>
@@ -117,5 +117,3 @@ function DashboardLayout() {
     </Layout>
   );
 }
-
-export default DashboardLayout;

@@ -16,7 +16,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { accountBanksApi } from '../api/accountBanks.api';
 
-function AccountBanksPage() {
+export default function AccountBanksPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
@@ -56,7 +56,13 @@ function AccountBanksPage() {
     onError: () => messageApi.error('Không thể xóa account bank'),
   });
 
-  const onCreate = async (values) => {
+  const onCreate = async (values: {
+    customerCode: string;
+    customerName: string;
+    bank: string;
+    accountNumber: string;
+    isDefault: boolean;
+  }) => {
     await createMutation.mutateAsync(values);
   };
 
@@ -85,13 +91,13 @@ function AccountBanksPage() {
       title: 'Mặc định',
       dataIndex: 'isDefault',
       key: 'isDefault',
-      render: (value) =>
+      render: (value: boolean) =>
         value ? <Tag color="gold">Default</Tag> : <Tag color="default">No</Tag>,
     },
     {
       title: 'Thao tác',
       key: 'actions',
-      render: (_, record) => (
+      render: (_: unknown, record: { _id: string; isDefault: boolean }) => (
         <Space>
           <Button
             icon={record.isDefault ? <StarFilled /> : <StarOutlined />}
@@ -170,5 +176,3 @@ function AccountBanksPage() {
     </>
   );
 }
-
-export default AccountBanksPage;

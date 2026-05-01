@@ -38,7 +38,7 @@ const initialFormValues = {
   isActive: true,
 };
 
-const vndFormatter = (value) => {
+const vndFormatter = (value: string | number | undefined | null) => {
   if (value === null || value === undefined || value === '') {
     return '';
   }
@@ -49,19 +49,19 @@ const vndFormatter = (value) => {
   return `${Number(numeric).toLocaleString('vi-VN')} VND`;
 };
 
-const vndParser = (value) => {
+const vndParser = (value: string | undefined) => {
   if (!value) {
     return 0;
   }
   return Number(String(value).replace(/\D/g, ''));
 };
 
-function RoomsPage() {
+export default function RoomsPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const [searchText, setSearchText] = useState('');
-  const [selectedRoomId, setSelectedRoomId] = useState(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [editingRoom, setEditingRoom] = useState(null);
+  const [editingRoom, setEditingRoom] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
@@ -96,7 +96,7 @@ function RoomsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: roomsApi.deleteRoom,
-    onSuccess: async (_, roomId) => {
+    onSuccess: async (_: unknown, roomId: string) => {
       await queryClient.invalidateQueries({ queryKey: ['rooms'] });
       if (selectedRoomId === roomId) {
         setSelectedRoomId(null);
@@ -115,14 +115,14 @@ function RoomsPage() {
       return rooms;
     }
     return rooms.filter(
-      (room) =>
+      (room: any) =>
         room.name.toLowerCase().includes(keyword) ||
         room.nameUser.toLowerCase().includes(keyword),
     );
   }, [rooms, searchText]);
 
   const selectedRoom =
-    rooms.find((room) => room._id === selectedRoomId) ?? filteredRooms[0];
+    rooms.find((room: any) => room._id === selectedRoomId) ?? filteredRooms[0];
 
   const openCreateDrawer = () => {
     setEditingRoom(null);
@@ -130,13 +130,13 @@ function RoomsPage() {
     setIsDrawerOpen(true);
   };
 
-  const openEditDrawer = (room) => {
+  const openEditDrawer = (room: any) => {
     setEditingRoom(room);
     form.setFieldsValue(room);
     setIsDrawerOpen(true);
   };
 
-  const handleSubmit = async (values) => {
+  const handleSubmit = async (values: any) => {
     if (editingRoom?._id) {
       await updateMutation.mutateAsync({ id: editingRoom._id, payload: values });
       return;
@@ -167,7 +167,7 @@ function RoomsPage() {
               loading={roomsQuery.isLoading}
               dataSource={filteredRooms}
               locale={{ emptyText: 'Chưa có phòng' }}
-              renderItem={(room) => (
+              renderItem={(room: any) => (
                 <List.Item
                   onClick={() => setSelectedRoomId(room._id)}
                   className={`room-list-item ${
@@ -347,5 +347,3 @@ function RoomsPage() {
     </>
   );
 }
-
-export default RoomsPage;

@@ -34,13 +34,13 @@ import { roomsApi } from '../api/rooms.api';
 import { buildVietQrImageUrlFromAccountBank } from '../lib/vietQr';
 import { formatCurrencyVnd } from '../utils/format';
 
-const buildOtherFeesValue = (otherFees = []) =>
+const buildOtherFeesValue = (otherFees: any[] = []) =>
   otherFees.map((item) => ({
     name: item.name,
     amount: item.amount,
   }));
 
-const vndFormatter = (value) => {
+const vndFormatter = (value: string | number | undefined | null) => {
   if (value === null || value === undefined || value === '') {
     return '';
   }
@@ -51,32 +51,32 @@ const vndFormatter = (value) => {
   return `${Number(numeric).toLocaleString('vi-VN')} VND`;
 };
 
-const vndParser = (value) => {
+const vndParser = (value: string | undefined) => {
   if (!value) {
     return 0;
   }
   return Number(String(value).replace(/\D/g, ''));
 };
 
-function RoomBillsPage() {
+export default function RoomBillsPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const [filters, setFilters] = useState({
-    roomId: undefined,
-    billingMonth: undefined,
+    roomId: undefined as string | undefined,
+    billingMonth: undefined as string | undefined,
     page: 1,
     limit: 20,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState(null);
-  const [selectedRoomPricing, setSelectedRoomPricing] = useState(null);
+  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [selectedRoomPricing, setSelectedRoomPricing] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewRecord, setPreviewRecord] = useState(null);
+  const [previewRecord, setPreviewRecord] = useState<any>(null);
   const [previewTenantName, setPreviewTenantName] = useState('');
-  const [defaultAccountBank, setDefaultAccountBank] = useState(null);
+  const [defaultAccountBank, setDefaultAccountBank] = useState<any>(null);
   const [defaultAccountBankLoading, setDefaultAccountBankLoading] = useState(false);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
-  const snapshotRef = useRef(null);
-  const qrImageRef = useRef(null);
+  const snapshotRef = useRef<HTMLDivElement | null>(null);
+  const qrImageRef = useRef<HTMLImageElement | null>(null);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
@@ -86,7 +86,7 @@ function RoomBillsPage() {
   });
 
   const roomBillsQuery = useQuery({
-    queryKey: ['room-bills', filters.roomId, filters.billingMonth],
+    queryKey: ['room-bills', filters.roomId, filters.billingMonth, filters.page],
     queryFn: () =>
       roomBillsApi.getRoomBills({
         roomId: filters.roomId,
@@ -101,9 +101,6 @@ function RoomBillsPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['room-bills'] });
       messageApi.success('Tạo hóa đơn thành công');
-      setDrawerOpen(false);
-      setEditingRecord(null);
-      form.resetFields();
     },
     onError: () => messageApi.error('Không thể tạo hóa đơn'),
   });
@@ -113,16 +110,13 @@ function RoomBillsPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['room-bills'] });
       messageApi.success('Cập nhật hóa đơn thành công');
-      setDrawerOpen(false);
-      setEditingRecord(null);
-      form.resetFields();
     },
     onError: () => messageApi.error('Không thể cập nhật hóa đơn'),
   });
 
   const rooms = useMemo(() => roomsQuery.data?.items ?? [], [roomsQuery.data]);
   const roomMap = useMemo(
-    () => Object.fromEntries(rooms.map((room) => [room._id, room.name])),
+    () => Object.fromEntries(rooms.map((room: any) => [room._id, room.name])),
     [rooms],
   );
   const roomBills = useMemo(() => roomBillsQuery.data?.items ?? [], [roomBillsQuery.data]);
@@ -148,14 +142,13 @@ function RoomBillsPage() {
       }
 
       const selectedRoom =
-        rooms.find((item) => item._id === watchedRoomId) ??
+        rooms.find((item: any) => item._id === watchedRoomId) ??
         (await roomsApi.getRoomById(watchedRoomId));
       setSelectedRoomPricing({
         electricityUnitPrice: selectedRoom.electricityUnitPrice ?? 0,
         waterUnitPrice: selectedRoom.waterUnitPrice ?? 0,
       });
-      const previousMonth = dayjs(watchedBillingMonth)
-        .format('YYYY-MM');
+      const previousMonth = dayjs(watchedBillingMonth).format('YYYY-MM');
       const previousBillResponse = await roomBillsApi.getRoomBills({
         roomId: watchedRoomId,
         beforeMonth: previousMonth,
@@ -192,7 +185,7 @@ function RoomBillsPage() {
     messageApi,
   ]);
 
-  const handleOpenEdit = (record) => {
+  const handleOpenEdit = (record: any) => {
     setEditingRecord(record);
     setSelectedRoomPricing({
       electricityUnitPrice: record.roomId?.electricityUnitPrice ?? 0,
@@ -231,7 +224,7 @@ function RoomBillsPage() {
     const waterAmount = waterUsed * (selectedRoomPricing?.waterUnitPrice ?? 0);
     const normalizedOtherFees = otherFees ?? [];
     const otherFeesTotal = normalizedOtherFees.reduce(
-      (sum, fee) => sum + Number(fee?.amount ?? 0),
+      (sum: number, fee: any) => sum + Number(fee?.amount ?? 0),
       0,
     );
 
@@ -255,7 +248,7 @@ function RoomBillsPage() {
     otherFees,
   ]);
 
-  const onSubmit = async (values) => {
+  const onSubmit = async (values: any) => {
     const payload = {
       ...values,
       billingMonth: values.billingMonth.format('YYYY-MM'),
@@ -263,13 +256,24 @@ function RoomBillsPage() {
     };
 
     if (editingRecord?._id) {
-      await updateMutation.mutateAsync({ id: editingRecord._id, payload });
+      const updatedRecord = await updateMutation.mutateAsync({
+        id: editingRecord._id,
+        payload,
+      });
+      setDrawerOpen(false);
+      setEditingRecord(null);
+      form.resetFields();
+      await handleOpenPreview(updatedRecord);
       return;
     }
-    await createMutation.mutateAsync(payload);
+    const createdRecord = await createMutation.mutateAsync(payload);
+    setDrawerOpen(false);
+    setEditingRecord(null);
+    form.resetFields();
+    await handleOpenPreview(createdRecord);
   };
 
-  const handleOpenPreview = async (record) => {
+  const handleOpenPreview = async (record: any) => {
     setPreviewRecord(record);
     setPreviewTenantName('');
     setPreviewOpen(true);
@@ -323,7 +327,7 @@ function RoomBillsPage() {
       allowTaint: false,
     });
 
-    return await new Promise((resolve) => {
+    return await new Promise<Blob | null>((resolve) => {
       canvas.toBlob((blob) => resolve(blob), 'image/png');
     });
   };
@@ -370,7 +374,7 @@ function RoomBillsPage() {
       title: 'Phòng',
       dataIndex: 'roomId',
       key: 'roomId',
-      render: (value) => roomMap[value?._id ?? value] ?? '-',
+      render: (value: any) => roomMap[value?._id ?? value] ?? '-',
     },
     {
       title: 'Tháng',
@@ -411,12 +415,12 @@ function RoomBillsPage() {
       title: 'Tổng tiền',
       dataIndex: 'totalAmount',
       key: 'totalAmount',
-      render: (value) => formatCurrencyVnd(value),
+      render: (value: number) => formatCurrencyVnd(value),
     },
     {
       title: 'Thao tác',
       key: 'actions',
-      render: (_, record) => (
+      render: (_: unknown, record: any) => (
         <Space>
           <Button icon={<EyeOutlined />} onClick={() => handleOpenPreview(record)} />
           <Button icon={<EditOutlined />} onClick={() => handleOpenEdit(record)} />
@@ -446,10 +450,7 @@ function RoomBillsPage() {
         title="Quản lý Room Bills"
         extra={
           <Space>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => roomBillsQuery.refetch()}
-            >
+            <Button icon={<ReloadOutlined />} onClick={() => roomBillsQuery.refetch()}>
               Refresh
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreate}>
@@ -463,7 +464,7 @@ function RoomBillsPage() {
             style={{ width: 220 }}
             placeholder="Lọc theo phòng"
             allowClear
-            options={rooms.map((room) => ({
+            options={rooms.map((room: any) => ({
               value: room._id,
               label: room.name,
             }))}
@@ -521,7 +522,7 @@ function RoomBillsPage() {
           <Form.Item name="roomId" label="Phòng" rules={[{ required: true }]}>
             <Select
               placeholder="Chọn phòng"
-              options={rooms.map((room) => ({
+              options={rooms.map((room: any) => ({
                 value: room._id,
                 label: room.name,
               }))}
@@ -591,9 +592,7 @@ function RoomBillsPage() {
               <>
                 <Space style={{ marginBottom: 8 }}>
                   <strong>Chi phí phát sinh</strong>
-                  <Button onClick={() => add({ name: '', amount: 0 })}>
-                    Thêm chi phí
-                  </Button>
+                  <Button onClick={() => add({ name: '', amount: 0 })}>Thêm chi phí</Button>
                 </Space>
                 {fields.map((field) => (
                   <Space key={field.key} align="baseline" style={{ display: 'flex' }}>
@@ -633,8 +632,8 @@ function RoomBillsPage() {
               {formatCurrencyVnd(previewTotalAmount)}
             </Typography.Title>
             <Typography.Text type="secondary">
-              Công thức: tiền thuê + (điện mới - điện cũ) x đơn giá điện + (nước
-              mới - nước cũ) x đơn giá nước + các loại phí.
+              Công thức: tiền thuê + (điện mới - điện cũ) x đơn giá điện + (nước mới - nước
+              cũ) x đơn giá nước + các loại phí.
             </Typography.Text>
           </Form.Item>
           <Space>
@@ -705,20 +704,16 @@ function RoomBillsPage() {
                 </Typography.Title>
                 <Typography.Paragraph style={{ marginBottom: 8 }}>
                   Người thuê:{' '}
-                  <strong>
-                    {previewTenantName || previewRecord.roomId?.nameUser || '-'}
-                  </strong>
+                  <strong>{previewTenantName || previewRecord.roomId?.nameUser || '-'}</strong>
                 </Typography.Paragraph>
                 <Typography.Paragraph style={{ marginBottom: 8 }}>
                   Tháng: <strong>{previewRecord.billingMonth}</strong>
                 </Typography.Paragraph>
                 <Typography.Paragraph style={{ marginBottom: 4 }}>
-                  Điện: {previewRecord.electricityOldReading} →{' '}
-                  {previewRecord.electricityNewReading}
+                  Điện: {previewRecord.electricityOldReading} → {previewRecord.electricityNewReading}
                 </Typography.Paragraph>
                 <Typography.Paragraph style={{ marginBottom: 8 }}>
-                  Nước: {previewRecord.waterOldReading} →{' '}
-                  {previewRecord.waterNewReading}
+                  Nước: {previewRecord.waterOldReading} → {previewRecord.waterNewReading}
                 </Typography.Paragraph>
                 <Typography.Paragraph style={{ marginBottom: 4 }}>
                   Tiền thuê: {formatCurrencyVnd(previewRecord.monthlyRent)}
@@ -739,7 +734,7 @@ function RoomBillsPage() {
                   <Typography.Paragraph style={{ marginBottom: 4 }}>
                     Phí phát sinh:{' '}
                     {(previewRecord.otherFees ?? [])
-                      .map((fee) => `${fee.name}: ${formatCurrencyVnd(fee.amount)}`)
+                      .map((fee: any) => `${fee.name}: ${formatCurrencyVnd(fee.amount)}`)
                       .join(' | ')}
                   </Typography.Paragraph>
                 )}
@@ -783,5 +778,3 @@ function RoomBillsPage() {
     </>
   );
 }
-
-export default RoomBillsPage;

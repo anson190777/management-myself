@@ -1,6 +1,6 @@
 const DEFAULT_TEMPLATE = 'compact2';
 
-const normalizeAmount = (amount) => {
+const normalizeAmount = (amount: number): string => {
   const numeric = Number(amount ?? 0);
   if (Number.isNaN(numeric) || numeric < 0) {
     return '0';
@@ -8,16 +8,18 @@ const normalizeAmount = (amount) => {
   return String(Math.floor(numeric));
 };
 
-const toEncodedValue = (value) => encodeURIComponent(String(value ?? '').trim());
+const toEncodedValue = (value: string): string =>
+  encodeURIComponent(String(value ?? '').trim());
 
-/**
- * Build VietQR image URL.
- * Formula equivalent:
- * https://img.vietqr.io/image/{bankCode}-{accountNumber}-{template}.png
- *   ?amount={amount}
- *   &addInfo={encodedTransferContent}
- *   &accountName={encodedAccountName}
- */
+interface BuildVietQrImageUrlParams {
+  bankCode: string;
+  accountNumber: string;
+  template?: string;
+  amount?: number;
+  addInfo?: string;
+  accountName?: string;
+}
+
 export const buildVietQrImageUrl = ({
   bankCode,
   accountNumber,
@@ -25,7 +27,7 @@ export const buildVietQrImageUrl = ({
   amount = 0,
   addInfo = '',
   accountName = '',
-}) => {
+}: BuildVietQrImageUrlParams): string => {
   if (!bankCode || !accountNumber) {
     return '';
   }
@@ -40,18 +42,26 @@ export const buildVietQrImageUrl = ({
   return `https://img.vietqr.io/image/${path}?${query.toString()}`;
 };
 
-/**
- * Convenience function when working directly with account-bank entity.
- */
+interface BuildFromAccountBankParams {
+  accountBank?: {
+    bank?: string;
+    accountNumber?: string;
+    customerName?: string;
+  } | null;
+  amount?: number;
+  addInfo?: string;
+  template?: string;
+}
+
 export const buildVietQrImageUrlFromAccountBank = ({
   accountBank,
   amount = 0,
   addInfo = '',
   template = DEFAULT_TEMPLATE,
-}) =>
+}: BuildFromAccountBankParams): string =>
   buildVietQrImageUrl({
-    bankCode: accountBank?.bank,
-    accountNumber: accountBank?.accountNumber,
+    bankCode: accountBank?.bank ?? '',
+    accountNumber: accountBank?.accountNumber ?? '',
     template,
     amount,
     addInfo,
