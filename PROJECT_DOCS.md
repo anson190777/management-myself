@@ -2,190 +2,356 @@
 
 ## 1) Mục tiêu
 
-Tài liệu này là "nguồn sự thật" cho giai đoạn backend hiện tại:
+Ứng dụng quản lý phòng trọ (mặc định 2 phòng, có thể mở rộng):
 
-- Quản lý 2 phòng trọ (có thể mở rộng thêm phòng).
 - Lưu thông tin cố định của phòng.
 - Lưu hóa đơn theo tháng (snapshot) để truy vết lịch sử.
-- Cung cấp CRUD API bằng NestJS + MongoDB.
+- Tạo QR chuyển khoản từ tài khoản ngân hàng mặc định.
 
-Ngoài phạm vi hiện tại:
+**Nguồn dữ liệu hiện tại (frontend):**
+
+| Module | Nguồn | Ghi chú |
+|--------|--------|---------|
+| `rooms`, `room_bills` | **Google Spreadsheet** | CRUD qua Next.js API + OAuth |
+| `account_banks` | **NestJS + MongoDB** | Vẫn gọi REST API backend |
+
+**Ngoài phạm vi:**
 
 - Chưa làm module lương/dòng tiền cá nhân.
-- Chưa có auth/role.
+- Chưa có auth/role đa user.
 
-## 2) Cấu trúc project
+---
 
-- `frontend`: React (Vite)
-- `backend`: NestJS
-- `docker-compose.yml`: MongoDB + Backend + Frontend cho dev
+## 2) Kiến trúc tổng quan
 
-## 3) Công nghệ backend
+```mermaid
+flowchart TB
+  subgraph ui [Frontend - Next.js + React]
+    RoomsPage
+    RoomBillsPage
+    AccountBanksPage
+    GoogleConnectionButton
+  end
+  subgraph sheetsLib [Client library]
+    roomsSheets
+    roomBillsSheets
+  end
+  subgraph nextApi [Next.js API routes]
+    oauth["/api/google/oauth/*"]
+    sheetsApi["/api/google/sheets/*"]
+    proxy["/api/* → Nest proxy"]
+  end
+  subgraph external [Bên ngoài]
+    GSheet["Google Spreadsheet\n1JRTw0JdfMroakOY9B-J3B88WdMaNLTRYrWxC0u5zSvo"]
+    GoogleOAuth[Google OAuth]
+  end
+  subgraph backend [Backend - NestJS]
+    NestAPI["REST /rooms, /room-bills, /account-banks"]
+    MongoDB[(MongoDB)]
+  end
 
-- NestJS 10
-- MongoDB + Mongoose
-- Validation: `class-validator`, `class-transformer`
-- API docs: Swagger (`/api-docs`)
+  RoomsPage --> roomsSheets
+  RoomBillsPage --> roomsSheets
+  RoomBillsPage --> roomBillsSheets
+  AccountBanksPage --> proxy
+  roomsSheets --> sheetsApi
+  roomBillsSheets --> sheetsApi
+  sheetsApi --> GSheet
+  oauth --> GoogleOAuth
+  proxy --> NestAPI
+  NestAPI --> MongoDB
+```
 
-## 4) Dữ liệu và collection
+- **Plan 1 (Google Sheets OAuth):** OAuth Google qua Next.js API, token lưu **HttpOnly cookie** (không lưu token trên sheet).
+- **Plan 2 (Google Sheets Data Layer):** Toàn bộ CRUD phòng + hóa đơn trên spreadsheet; UI gọi `src/lib/sheets/*` thay `rooms.api` / `roomBills.api`.
 
-### 4.1 `rooms` (dữ liệu cố định của phòng)
+Backend NestJS vẫn tồn tại (Swagger, MongoDB) — frontend **không** gọi `/rooms` và `/room-bills` nữa; có thể deprecate sau.
 
-Field chính:
+---
 
-- `name`: tên phòng
-- `nameUser`: tên người thuê
-- `monthlyRent`: tiền thuê hàng tháng
-- `electricityUnitPrice`: đơn giá điện
-- `waterUnitPrice`: đơn giá nước
-- `wifiFee`: phí wifi
-- `trashFee`: phí rác
-- `isActive`: phòng đang hoạt động hay không
-- `createdAt`, `updatedAt`
+## 3) Cấu trúc project
 
-### 4.2 `room_bills` (hóa đơn theo tháng)
+| Thư mục | Vai trò |
+|---------|---------|
+| `frontend/` | Next.js 16 + React SPA, Ant Design, React Query |
+| `frontend/pages/api/google/` | OAuth + Google Sheets CRUD (server-only) |
+| `frontend/src/lib/sheets/` | Library đọc/ghi sheet (mirror API cũ) |
+| `frontend/src/config/googleSheets.config.ts` | Spreadsheet ID, mapping cột |
+| `backend/` | NestJS 10 + Mongoose (account banks + API legacy) |
+| `docker-compose.yml` | MongoDB + Backend + Frontend |
 
-Field chính:
+---
 
-- `roomId`: tham chiếu `rooms._id`
-- `billingMonth`: dạng `YYYY-MM`
-- `electricityOldReading`, `electricityNewReading`, `electricityUsed`
-- `waterOldReading`, `waterNewReading`, `waterUsed`
-- `electricityAmount`, `waterAmount`
-- `wifiFee`, `trashFee`, `monthlyRent` (snapshot theo tháng)
-- `otherFees`: danh sách chi phí phát sinh (`[{ name, amount }]`)
-- `note`
-- `totalAmount`
-- `createdAt`, `updatedAt`
+## 4) Google OAuth & Sheets (đã triển khai)
 
-Ràng buộc quan trọng:
+### 4.1 Setup Google Cloud (một lần)
 
-- Unique index: `roomId + billingMonth` (mỗi phòng chỉ 1 bill/tháng).
+1. [Google Cloud Console](https://console.cloud.google.com/) → tạo project (vd. `management-myself`).
+2. Bật **Google Sheets API** (và **Google Drive API** nếu cần tạo tab mới).
+3. **OAuth consent screen** → **External**, trạng thái **Testing**, thêm **Test users** = email Google dùng app.
+4. **Credentials → OAuth client ID → Web application**:
+   - **Authorized JavaScript origins:** `http://localhost:3000` (+ domain prod sau).
+   - **Authorized redirect URIs:** `http://localhost:3000/api/google/oauth/callback`
+5. Copy **Client ID** + **Client Secret** → `frontend/.env.local` (không commit).
 
-### 4.3 `account_banks` (tài khoản ngân hàng nhận tiền)
+**Chi phí:** Miễn phí cho use case cá nhân (Sheets API + OAuth Testing).
 
-Field chính:
+**Lưu ý bảo mật:** `client_secret` **bắt buộc** chạy trên server (Next API routes). Không đặt secret trong React bundle.
 
-- `customerCode`: mã khách hàng
-- `customerName`: tên khách hàng
-- `bank`: tên ngân hàng
-- `accountNumber`: số tài khoản
-- `isDefault`: tài khoản mặc định
-- `createdAt`, `updatedAt`
+### 4.2 Xác thực: Public link vs OAuth
 
-Ràng buộc quan trọng:
+| Thao tác | Chỉ public link | Google Sheets API |
+|----------|-----------------|-------------------|
+| Đọc trên web / export CSV | Có | Có (cần credential) |
+| Ghi qua API (append, sửa dòng, tạo tab) | **Không** | **Bắt buộc OAuth hoặc Service Account** |
 
-- Chỉ được có tối đa 1 record `isDefault = true` (unique partial index).
+App dùng **OAuth user**: bấm **Kết nối Google** một lần → token trong **HttpOnly cookie**. File spreadsheet **không cần public**; tài khoản Google đã OAuth cần quyền **Editor** trên file dữ liệu.
 
-## 5) Công thức tính bill (server-side)
+**Đã bỏ (so với bản plan OAuth đầu):** lưu `refresh_token` trên tab `_oauth_tokens` trong sheet — không dùng token registry trên sheet nữa.
 
-Trong `room-bills.service`:
+### 4.3 Biến môi trường (`frontend/.env.example`)
+
+```bash
+NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID=...
+NEXT_PUBLIC_GOOGLE_DATA_SPREADSHEET_ID=1JRTw0JdfMroakOY9B-J3B88WdMaNLTRYrWxC0u5zSvo
+
+GOOGLE_OAUTH_CLIENT_SECRET=...
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/api/google/oauth/callback
+GOOGLE_DATA_SPREADSHEET_ID=1JRTw0JdfMroakOY9B-J3B88WdMaNLTRYrWxC0u5zSvo
+```
+
+Spreadsheet dữ liệu: [Google Sheet](https://docs.google.com/spreadsheets/d/1JRTw0JdfMroakOY9B-J3B88WdMaNLTRYrWxC0u5zSvo/edit)
+
+### 4.4 Luồng OAuth
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant SPA as React_SPA
+  participant NextAPI as Next_API_routes
+  participant Google as Google_OAuth_Sheets
+
+  User->>SPA: Kết nối Google
+  SPA->>NextAPI: GET /api/google/oauth/start
+  NextAPI->>Google: Redirect authorize
+  Google->>User: Consent
+  Google->>NextAPI: callback?code=...
+  NextAPI->>Google: Exchange code + client_secret
+  NextAPI->>NextAPI: setGoogleSessionCookies (HttpOnly)
+  NextAPI->>SPA: Redirect success
+  SPA->>NextAPI: /api/google/sheets/*
+  NextAPI->>Google: Sheets API với token từ cookie
+```
+
+**API OAuth:**
+
+| Route | Mô tả |
+|-------|--------|
+| `GET /api/google/oauth/start` | Bắt đầu OAuth |
+| `GET /api/google/oauth/callback` | Đổi code, lưu cookie |
+| `GET /api/google/oauth/status` | Trạng thái đã kết nối |
+| `POST /api/google/oauth/disconnect` | Xóa session |
+
+**UI:** `GoogleConnectionButton`, `GoogleSheetsGuard` — bắt buộc kết nối Google trước khi CRUD phòng/hóa đơn.
+
+---
+
+## 5) Cấu trúc Google Spreadsheet
+
+### 5.1 Tab `rooms`
+
+Một dòng = một phòng. Cột map theo `ROOM_COLUMNS` trong `googleSheets.config.ts`:
+
+| key | Header | Ghi chú |
+|-----|--------|---------|
+| `_id` | ID | UUID khi tạo |
+| `name` | Tên phòng | |
+| `nameUser` | Người thuê | |
+| `monthlyRent` | Tiền thuê | number |
+| `electricityUnitPrice` | Đơn giá điện | number |
+| `waterUnitPrice` | Đơn giá nước | number |
+| `wifiFee` | Phí wifi | number |
+| `trashFee` | Phí rác | number |
+| `isActive` | Đang hoạt động | TRUE/FALSE |
+| `createdAt`, `updatedAt` | ISO string | |
+| `billSheetName` | Sheet hóa đơn | `bill_<sanitized_name>` — cố định lúc tạo, không đổi khi sửa tên phòng |
+
+### 5.2 Tab `bill_<tên_phòng>` (mỗi phòng một tab)
+
+Tạo tự động khi **tạo phòng**. Cột map `ROOM_BILL_COLUMNS`:
+
+`_id`, `roomId`, `billingMonth`, `electricityOldReading`, `electricityNewReading`, `electricityUsed`, `waterOldReading`, `waterNewReading`, `waterUsed`, `electricityAmount`, `waterAmount`, `wifiFee`, `trashFee`, `monthlyRent`, `otherFees` (JSON string), `note`, `totalAmount`, `createdAt`, `updatedAt`
+
+**Ràng buộc:** mỗi tab bill — tối đa **1 hóa đơn / `billingMonth`** (kiểm tra phía client trước khi append).
+
+**Tên tab:** `sheetNames.ts` — sanitize theo quy tắc Google (tối đa 100 ký tự, loại `:/\?*[]`, prefix `bill_`).
+
+### 5.3 Bootstrap
+
+- `POST /api/google/sheets/bootstrap` — tạo tab `rooms` + header hàng 1 nếu chưa có.
+- Tab `gid=984233398` trong link cũ **không bị xóa**; dữ liệu mới dùng tab tên `rooms`.
+
+---
+
+## 6) Next.js API — Google Sheets
+
+Tất cả route dùng session OAuth từ cookie (`getAuthenticatedClient`).
+
+| Route | Method | Mô tả |
+|-------|--------|--------|
+| `/api/google/sheets/read` | GET | Đọc theo `sheetName` |
+| `/api/google/sheets/append` | POST | Thêm dòng |
+| `/api/google/sheets/update` | PATCH | Sửa theo `_id` |
+| `/api/google/sheets/delete-row` | DELETE | Xóa dòng theo `_id` |
+| `/api/google/sheets/ensure-sheet` | POST | Tạo tab + header (vd. `bill_*`) |
+| `/api/google/sheets/delete-sheet` | DELETE | Xóa tab (khi xóa phòng) |
+| `/api/google/sheets/bootstrap` | POST | Khởi tạo tab `rooms` |
+
+Payload mẫu: `{ sheetName, row }` hoặc `{ sheetName, id, row }`.
+
+**Server:** `frontend/src/server/google/sheetsClient.ts` — `readSheetRange`, `appendRow`, `updateRowById`, `deleteRowById`, `ensureSheetWithHeaders`, `deleteSheetTab`.
+
+---
+
+## 7) Client library `src/lib/sheets/`
+
+Thay thế `rooms.api.ts` / `roomBills.api.ts` trên UI — **cùng signature** để pages không đổi nhiều logic.
+
+```
+lib/sheets/
+  http.ts                 # gọi /api/google/sheets/*
+  sheetNames.ts           # sanitize tên tab bill_*
+  mappers/
+    room.mapper.ts
+    roomBill.mapper.ts    # parse otherFees JSON
+  calculations/
+    roomBill.calc.ts      # port logic buildBillPayload từ backend
+  pagination.ts
+  roomsSheets.ts
+  roomBillsSheets.ts
+  index.ts
+```
+
+| Hàm | Hành vi |
+|-----|---------|
+| `roomsSheets.getRooms` | Đọc tab `rooms`, paginate/filter client-side |
+| `roomsSheets.createRoom` | UUID + `ensure-sheet` tab bill + append `rooms` |
+| `roomsSheets.updateRoom` / `deleteRoom` | update/xóa dòng; xóa phòng → xóa tab bill |
+| `roomBillsSheets.getRoomBills` | Có `roomId` → 1 tab; không có → merge tất cả tab bill |
+| `roomBillsSheets.createRoomBill` | `roomBill.calc` + append; chặn trùng `billingMonth` |
+| `beforeMonth` | Filter bill tháng trước (auto-fill số điện/nước cũ) |
+
+**Pages dùng library:**
+
+- `RoomsPage.tsx` → `roomsSheets`
+- `RoomBillsPage.tsx` → `roomsSheets` + `roomBillsSheets` + `accountBanksApi` (QR)
+
+---
+
+## 8) Công thức tính hóa đơn
+
+Logic trong `frontend/src/lib/sheets/calculations/roomBill.calc.ts` (port từ `backend/src/room-bills/room-bills.service.ts`):
 
 - `electricityUsed = electricityNewReading - electricityOldReading`
 - `waterUsed = waterNewReading - waterOldReading`
 - `electricityAmount = electricityUsed * room.electricityUnitPrice`
 - `waterAmount = waterUsed * room.waterUnitPrice`
-- `wifiFee/trashFee/monthlyRent`:
-  - Nếu client truyền thì dùng giá trị truyền vào.
-  - Nếu không truyền thì lấy từ `room` (snapshot mặc định).
+- `wifiFee` / `trashFee` / `monthlyRent`: client truyền thì dùng giá trị truyền; không truyền thì lấy từ room (snapshot)
 - `totalAmount = electricityAmount + waterAmount + wifiFee + trashFee + monthlyRent + sum(otherFees.amount)`
 
-## 6) API hiện có
+---
 
-### 6.1 Rooms
+## 9) Backend NestJS + MongoDB (legacy / account banks)
 
-- `POST /rooms`
-- `GET /rooms`
-- `GET /rooms/:id`
-- `PATCH /rooms/:id`
-- `DELETE /rooms/:id`
+### 9.1 Công nghệ
 
-### 6.2 Room Bills
+- NestJS 10, MongoDB + Mongoose
+- Validation: `class-validator`, `class-transformer`
+- Swagger: `http://localhost:3000/api-docs` (khi chạy backend)
 
-- `POST /room-bills`
-- `GET /room-bills?roomId=&billingMonth=&beforeMonth=&fields=&page=&limit=`
-- `GET /room-bills/:id`
-- `PATCH /room-bills/:id`
-- `DELETE /room-bills/:id`
+### 9.2 Collections (tham chiếu)
 
-Ghi chú:
-- `beforeMonth=YYYY-MM`: lấy các bill trước tháng này (dùng cho logic lấy bill gần nhất tháng trước).
-- `fields=a,b,c`: chọn field cần trả về để tối ưu payload.
+**`rooms`** — field: `name`, `nameUser`, `monthlyRent`, `electricityUnitPrice`, `waterUnitPrice`, `wifiFee`, `trashFee`, `isActive`, timestamps.
 
-### 6.3 Account Banks
+**`room_bills`** — field: `roomId`, `billingMonth` (`YYYY-MM`), chỉ số điện/nước, amounts, `otherFees`, `totalAmount`, timestamps. Unique: `roomId + billingMonth`.
 
-- `POST /account-banks` (create)
-- `GET /account-banks` (list)
-- `GET /account-banks/default` (get default)
-- `PATCH /account-banks/:id/default` (set default mới, tự hủy default cũ)
-- `DELETE /account-banks/:id` (delete)
+**`account_banks`** — vẫn dùng qua API: `customerCode`, `customerName`, `bank`, `accountNumber`, `isDefault` (tối đa 1 default).
 
-### 6.4 Pagination chuẩn cho list API
+### 9.3 API backend (frontend chỉ dùng account banks)
 
-- `GET /rooms?page=1&limit=20`
-- `GET /room-bills?page=1&limit=20`
-- Response list trả về dạng:
-  - `items`
-  - `pagination` (`page`, `limit`, `totalItems`, `totalPages`)
+- `POST/GET/PATCH/DELETE /rooms`, `/room-bills` — **không gọi từ UI** (dữ liệu trên Sheets)
+- `POST/GET/PATCH/DELETE /account-banks` — **đang dùng** (`AccountBanksPage`, QR trên `RoomBillsPage`)
 
-## 7) Swagger
+List pagination: `items` + `pagination` (`page`, `limit`, `totalItems`, `totalPages`).
 
-- URL: `http://localhost:3000/api-docs`
-- Đã có:
-  - `ApiTags` cho `rooms`, `room-bills`, `account-banks`
-  - mô tả endpoint (`ApiOperation`, `ApiParam`, `ApiQuery`, `ApiBody`)
-  - request schema DTO
-  - response schema DTO (`RoomResponseDto`, `RoomBillResponseDto`)
+---
 
-## 8) Các file backend quan trọng
+## 10) Cách chạy local
 
-- `backend/src/app.module.ts`: ConfigModule + MongooseModule
-- `backend/src/main.ts`: ValidationPipe + Swagger setup
-- `backend/src/rooms/*`: module/controller/service/schema/dto
-- `backend/src/room-bills/*`: module/controller/service/schema/dto
-- `backend/src/account-bank/*`: module/controller/service/schema/dto
-- `backend/.env.example`: biến môi trường mẫu
+### Frontend + Google Sheets
 
-## 9) Cách chạy local
+1. Copy `frontend/.env.example` → `frontend/.env.local`, điền OAuth + spreadsheet ID.
+2. Share spreadsheet cho email Google sẽ dùng khi **Kết nối Google** (quyền Editor).
+3. `cd frontend && npm install && npm run dev` → mặc định `http://localhost:3000`
+4. Mở app → **Kết nối Google** → (tuỳ chọn) bootstrap tab `rooms` qua UI/guard.
 
-### Cách 1: Chạy nhanh bằng Docker Compose (khuyến nghị)
+### Docker Compose (MongoDB + Nest + Frontend)
 
-1. Chạy toàn bộ service:
-  - `docker compose up -d --build`
-2. Xem logs backend/frontend:
-  - `docker compose logs -f backend`
-  - `docker compose logs -f frontend`
-3. Mở ứng dụng:
-  - Frontend: `http://localhost:5173`
-4. Mở docs backend:
-  - `http://localhost:3000/api-docs`
+```bash
+docker compose up -d --build
+```
 
-### Cách 2: Chạy backend local, chỉ dùng MongoDB từ Docker
+- MongoDB: `27017`
+- Backend: `http://localhost:3000` (Swagger `/api-docs`)
+- Frontend trong compose có thể map port `5173` — nếu chạy Next local thì dùng port **3000** và cập nhật redirect URI OAuth cho khớp.
 
-1. Chạy MongoDB:
-  - `docker compose up -d mongodb`
-2. Chạy backend:
-  - `cd backend`
-  - `npm install`
-  - `npm run start:dev`
+### Chỉ MongoDB (dev backend)
 
-Nếu máy chưa có Docker, backend sẽ không kết nối được MongoDB (`ECONNREFUSED 27017`).
+```bash
+docker compose up -d mongodb
+cd backend && npm install && npm run start:dev
+```
 
-## 10) Quy ước dev để làm việc tiếp
+---
 
-- Không đổi schema mà không cập nhật tài liệu này.
-- Khi thêm field vào `room_bills`, bắt buộc cập nhật:
-  - schema
-  - create/update DTO
-  - response DTO
-  - Swagger annotations
-- Nếu đổi công thức tính tiền, ghi rõ trong mục "Công thức tính bill".
-- Ưu tiên giữ tính "snapshot theo tháng" để bảo toàn lịch sử bill.
+## 11) Kiểm thử manual (Google Sheets)
 
-## 11) Gợi ý bước tiếp theo
+1. Kết nối Google → bootstrap tab `rooms` (nếu chưa có).
+2. Tạo phòng → 1 dòng trong `rooms` + tab `bill_*` có header.
+3. List / sửa / xóa phòng — không gọi Nest `/rooms`.
+4. Tạo hóa đơn → dòng mới trong tab bill; `totalAmount` khớp công thức.
+5. List bills (có/không `roomId`), sửa bill, auto-fill số cũ từ tháng trước (`beforeMonth`).
+6. Ngắt kết nối Google → thao tác báo lỗi / guard UI.
+7. QR chuyển khoản vẫn lấy `account-banks` từ backend.
 
-- Thêm endpoint thống kê tổng tiền theo tháng/quý.
-- Thêm seed script cho 2 phòng mẫu + bill mẫu.
-- Thêm auth (JWT) nếu cần đa user/phân quyền.
-- Frontend trang quản lý phòng + lập bill tháng từ form.
+---
 
+## 12) Rủi ro & giảm thiểu
+
+| Rủi ro | Giảm thiểu |
+|--------|------------|
+| List tất cả bills chậm (N tab) | Số phòng nhỏ; React Query cache; filter `roomId` chỉ đọc 1 tab |
+| Đổi tên phòng vs tên tab | `billSheetName` cố định lúc tạo |
+| `otherFees` mảng | JSON một cột; mapper parse an toàn |
+| Chưa OAuth | `GoogleSheetsGuard` + nút kết nối |
+| Google API rate limit | Tránh refetch liên tục; đọc tuần tự khi merge nhiều tab |
+
+---
+
+## 13) Quy ước dev
+
+- Đổi cột sheet → cập nhật `googleSheets.config.ts` + mapper tương ứng + mục này.
+- Đổi công thức tiền → sửa `roomBill.calc.ts` và ghi rõ ở mục 8.
+- Giữ snapshot theo tháng trên bill (wifi/trash/rent có thể khác room tại thời điểm lập).
+- Secret OAuth chỉ trong env server; không commit `.env.local`.
+- Migrate token store sang Nest/DB: giữ interface tách `http.ts` / server client để đổi base URL sau.
+
+---
+
+## 14) Bước tiếp theo (gợi ý)
+
+- Đồng bộ hoặc deprecate hoàn toàn MongoDB `rooms` / `room_bills` nếu không cần backend cho 2 module này.
+- Thống kê tổng tiền theo tháng/quý (đọc từ Sheets hoặc cache).
+- Service Account thay OAuth nếu muốn bỏ nút "Kết nối Google" (server tự ghi).
+- Auth JWT nếu cần đa user.
+- Cập nhật `docker-compose` frontend port / env Google cho khớp Next.js 3000.
