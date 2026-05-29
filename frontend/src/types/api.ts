@@ -29,6 +29,9 @@ export interface Room {
   wifiFee: number;
   trashFee: number;
   isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  billSheetName?: string;
 }
 
 export interface OtherFee {
@@ -42,8 +45,10 @@ export interface RoomBill {
   billingMonth: string;
   electricityOldReading: number;
   electricityNewReading: number;
+  electricityUsed: number;
   waterOldReading: number;
   waterNewReading: number;
+  waterUsed: number;
   electricityAmount: number;
   waterAmount: number;
   wifiFee: number;
@@ -52,4 +57,6 @@ export interface RoomBill {
   totalAmount: number;
   note?: string;
   otherFees?: OtherFee[];
+  createdAt?: string;
+  updatedAt?: string;
 }

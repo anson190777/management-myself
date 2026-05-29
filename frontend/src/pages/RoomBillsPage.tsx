@@ -29,8 +29,9 @@ import html2canvas from 'html2canvas';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { accountBanksApi } from '../api/accountBanks.api';
-import { roomBillsApi } from '../api/roomBills.api';
-import { roomsApi } from '../api/rooms.api';
+import GoogleSheetsGuard from '../components/google/GoogleSheetsGuard';
+import { roomBillsSheets } from '../lib/sheets/roomBillsSheets';
+import { roomsSheets } from '../lib/sheets/roomsSheets';
 import { buildVietQrImageUrlFromAccountBank } from '../lib/vietQr';
 import { formatCurrencyVnd } from '../utils/format';
 
@@ -82,13 +83,13 @@ export default function RoomBillsPage() {
 
   const roomsQuery = useQuery({
     queryKey: ['rooms', 1],
-    queryFn: () => roomsApi.getRooms({ page: 1, limit: 20 }),
+    queryFn: () => roomsSheets.getRooms({ page: 1, limit: 500 }),
   });
 
   const roomBillsQuery = useQuery({
     queryKey: ['room-bills', filters.roomId, filters.billingMonth, filters.page],
     queryFn: () =>
-      roomBillsApi.getRoomBills({
+      roomBillsSheets.getRoomBills({
         roomId: filters.roomId,
         billingMonth: filters.billingMonth,
         page: filters.page,
@@ -97,7 +98,7 @@ export default function RoomBillsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: roomBillsApi.createRoomBill,
+    mutationFn: roomBillsSheets.createRoomBill,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['room-bills'] });
       messageApi.success('Tạo hóa đơn thành công');
@@ -106,7 +107,7 @@ export default function RoomBillsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: roomBillsApi.updateRoomBill,
+    mutationFn: roomBillsSheets.updateRoomBill,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['room-bills'] });
       messageApi.success('Cập nhật hóa đơn thành công');
@@ -143,13 +144,13 @@ export default function RoomBillsPage() {
 
       const selectedRoom =
         rooms.find((item: any) => item._id === watchedRoomId) ??
-        (await roomsApi.getRoomById(watchedRoomId));
+        (await roomsSheets.getRoomById(watchedRoomId));
       setSelectedRoomPricing({
         electricityUnitPrice: selectedRoom.electricityUnitPrice ?? 0,
         waterUnitPrice: selectedRoom.waterUnitPrice ?? 0,
       });
       const previousMonth = dayjs(watchedBillingMonth).format('YYYY-MM');
-      const previousBillResponse = await roomBillsApi.getRoomBills({
+      const previousBillResponse = await roomBillsSheets.getRoomBills({
         roomId: watchedRoomId,
         beforeMonth: previousMonth,
         fields: 'electricityNewReading,waterNewReading',
@@ -282,7 +283,7 @@ export default function RoomBillsPage() {
     try {
       const roomId = record.roomId?._id ?? record.roomId;
       if (roomId) {
-        const roomDetail = await roomsApi.getRoomById(roomId);
+        const roomDetail = await roomsSheets.getRoomById(roomId);
         setPreviewTenantName(roomDetail?.nameUser ?? '');
       }
 
@@ -444,7 +445,7 @@ export default function RoomBillsPage() {
   }, [previewRecord, defaultAccountBank, roomMap]);
 
   return (
-    <>
+    <GoogleSheetsGuard>
       {contextHolder}
       <Card
         title="Quản lý Room Bills"
@@ -775,6 +776,6 @@ export default function RoomBillsPage() {
           </div>
         )}
       </Modal>
-    </>
+    </GoogleSheetsGuard>
   );
 }

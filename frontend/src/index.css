@@ -37,6 +37,7 @@ body {
   padding: 0 16px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   border-bottom: 1px solid #f0f0f0;
 }
 
