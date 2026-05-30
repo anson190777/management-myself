@@ -24,7 +24,6 @@ import {
 } from 'antd';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import GoogleSheetsGuard from '../components/google/GoogleSheetsGuard';
 import { roomsSheets } from '../lib/sheets/roomsSheets';
 import { formatCurrencyVnd } from '../utils/format';
 
@@ -146,7 +145,7 @@ export default function RoomsPage() {
   };
 
   return (
-    <GoogleSheetsGuard>
+    <>
       {contextHolder}
       <Row gutter={16}>
         <Col xs={24} lg={10}>
@@ -345,6 +344,6 @@ export default function RoomsPage() {
           </Space>
         </Form>
       </Drawer>
-    </GoogleSheetsGuard>
+    </>
   );
 }

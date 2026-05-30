@@ -42,6 +42,7 @@ export interface OtherFee {
 export interface RoomBill {
   _id: string;
   roomId: string | Room;
+  roomName?: string;
   billingMonth: string;
   electricityOldReading: number;
   electricityNewReading: number;

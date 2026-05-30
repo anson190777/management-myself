@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import {
+  ACCOUNT_BANKS_SHEET_NAME,
+  ACCOUNT_BANK_COLUMNS,
   getRoomBillSheetDefinition,
   getSheetDefinition,
   googleSheetsConfig,
@@ -106,6 +108,9 @@ const resolveDefinition = (
   if (sheetName) {
     if (sheetName === ROOMS_SHEET_NAME) {
       return googleSheetsConfig.sheets.rooms;
+    }
+    if (sheetName === ACCOUNT_BANKS_SHEET_NAME) {
+      return googleSheetsConfig.sheets.accountBanks;
     }
     return getRoomBillSheetDefinition(sheetName);
   }
@@ -300,7 +305,11 @@ const ensureSheetWithHeadersOnApi = async (
 ): Promise<{ created: boolean }> => {
   const columns =
     options.columns ??
-    (options.sheetName === ROOMS_SHEET_NAME ? ROOM_COLUMNS : ROOM_BILL_COLUMNS);
+    (options.sheetName === ROOMS_SHEET_NAME
+      ? ROOM_COLUMNS
+      : options.sheetName === ACCOUNT_BANKS_SHEET_NAME
+        ? ACCOUNT_BANK_COLUMNS
+        : ROOM_BILL_COLUMNS);
   const sheetId = await getSheetIdByName(sheets, spreadsheetId, options.sheetName);
 
   if (sheetId === null) {
@@ -319,13 +328,26 @@ const ensureSheetWithHeadersOnApi = async (
   });
 
   const hasHeader = Boolean(headerResponse.data.values?.[0]?.length);
+  const expectedHeaders = columns.map((column) => column.header);
+  const currentHeaders = (headerResponse.data.values?.[0] ?? []) as string[];
+
   if (!hasHeader) {
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `${sheetTab}!A1`,
       valueInputOption: 'RAW',
       requestBody: {
-        values: [columns.map((column) => column.header)],
+        values: [expectedHeaders],
+      },
+    });
+  } else if (currentHeaders.length < expectedHeaders.length) {
+    const lastCol = columnIndexToLetter(expectedHeaders.length - 1);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetTab}!A1:${lastCol}1`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [expectedHeaders],
       },
     });
   }
@@ -366,6 +388,20 @@ export const deleteSheetTab = async (
   });
 };
 
+export const listSpreadsheetTabs = async (
+  req: NextApiRequest,
+  res: NextApiResponse,
+): Promise<string[]> => {
+  const env = getGoogleServerEnv();
+  const sheets = await getSheetsApi(req, res);
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: env.dataSpreadsheetId });
+  return (
+    meta.data.sheets
+      ?.map((item) => item.properties?.title)
+      .filter((title): title is string => Boolean(title)) ?? []
+  );
+};
+
 export const bootstrapDataSpreadsheetWithRow = async (
   row: OAuthTokenRow,
 ): Promise<{ roomsSheetReady: boolean; created: boolean }> => {
@@ -391,4 +427,4 @@ export const bootstrapDataSpreadsheet = async (
 };
 
 export const isGoogleSheetKey = (value: string): value is GoogleSheetKey =>
-  value === 'rooms';
+  value === 'rooms' || value === 'accountBanks';

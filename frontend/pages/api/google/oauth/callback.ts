@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const errorParam = typeof req.query.error === 'string' ? req.query.error : undefined;
   if (errorParam) {
     appendSetCookieHeader(res, clearStateCookie());
-    res.redirect(302, `/house/rooms?google=error&reason=${encodeURIComponent(errorParam)}`);
+    res.redirect(302, `/login?google=error&reason=${encodeURIComponent(errorParam)}`);
     return;
   }
 
@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     appendSetCookieHeader(res, clearStateCookie());
     res.redirect(
       302,
-      '/house/rooms?google=error&reason=invalid_oauth_state',
+      '/login?google=error&reason=invalid_oauth_state',
     );
     return;
   }
@@ -53,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     appendSetCookieHeader(res, clearStateCookie());
     res.redirect(
       302,
-      `/house/rooms?google=error&reason=${encodeURIComponent(
+      `/login?google=error&reason=${encodeURIComponent(
         error instanceof Error ? error.message : 'oauth_failed',
       )}`,
     );

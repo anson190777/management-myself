@@ -82,4 +82,17 @@ export const sheetsHttp = {
       { method: 'POST' },
     );
   },
+
+  listTabs() {
+    return sheetsFetch<{ sheetNames: string[] }>('/api/google/sheets/list-tabs');
+  },
+
+  migrateBillSheets() {
+    return sheetsFetch<{
+      migratedSheets: string[];
+      createdSheets: string[];
+      movedRows: number;
+      deletedLegacySheets: string[];
+    }>('/api/google/sheets/migrate-bill-sheets', { method: 'POST' });
+  },
 };

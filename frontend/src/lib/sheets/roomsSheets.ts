@@ -1,8 +1,9 @@
 import type { PaginatedResponse, Room } from '../../types/api';
 import { mapRoomToRow, mapRowToRoom } from './mappers/room.mapper';
-import { buildBillSheetName } from './sheetNames';
+import { isBillSheetForRoom } from './sheetNames';
 import { sheetsHttp } from './http';
 import { paginateItems } from './pagination';
+import { resetRoomBillsSheetsTabCache } from './roomBillsSheets';
 
 interface RoomParams {
   page?: number;
@@ -53,16 +54,13 @@ export const roomsSheets = {
   async createRoom(payload: Omit<Room, '_id' | 'createdAt' | 'updatedAt' | 'billSheetName'>) {
     await ensureBootstrap();
     const now = new Date().toISOString();
-    const billSheetName = buildBillSheetName(payload.name);
     const room: Room = {
       _id: crypto.randomUUID(),
       ...payload,
-      billSheetName,
       createdAt: now,
       updatedAt: now,
     };
 
-    await sheetsHttp.ensureSheet(billSheetName);
     await sheetsHttp.append({
       sheetKey: 'rooms',
       row: mapRoomToRow(room),
@@ -77,7 +75,6 @@ export const roomsSheets = {
       ...existing,
       ...payload,
       _id: existing._id,
-      billSheetName: existing.billSheetName || buildBillSheetName(existing.name),
       updatedAt: new Date().toISOString(),
     };
 
@@ -93,13 +90,18 @@ export const roomsSheets = {
   async deleteRoom(id: string) {
     const existing = await this.getRoomById(id);
     await sheetsHttp.deleteRow({ sheetKey: 'rooms', id });
-    if (existing.billSheetName) {
+
+    const { sheetNames } = await sheetsHttp.listTabs();
+    const billSheets = sheetNames.filter((name) => isBillSheetForRoom(name, existing.name));
+    for (const sheetName of billSheets) {
       try {
-        await sheetsHttp.deleteSheet(existing.billSheetName);
+        await sheetsHttp.deleteSheet(sheetName);
       } catch {
-        // Bill tab may already be removed / Không xóa được tab bill thì bỏ qua
+        // Bill tab may already be removed
       }
     }
+    resetRoomBillsSheetsTabCache();
+
     return { ok: true };
   },
 };

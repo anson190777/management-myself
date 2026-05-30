@@ -14,7 +14,7 @@ import {
 } from 'antd';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { accountBanksApi } from '../api/accountBanks.api';
+import { accountBanksSheets } from '../lib/sheets/accountBanksSheets';
 
 export default function AccountBanksPage() {
   const [messageApi, contextHolder] = message.useMessage();
@@ -24,11 +24,11 @@ export default function AccountBanksPage() {
 
   const listQuery = useQuery({
     queryKey: ['account-banks'],
-    queryFn: accountBanksApi.getList,
+    queryFn: accountBanksSheets.getList,
   });
 
   const createMutation = useMutation({
-    mutationFn: accountBanksApi.create,
+    mutationFn: accountBanksSheets.create,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['account-banks'] });
       messageApi.success('Tạo account bank thành công');
@@ -39,7 +39,7 @@ export default function AccountBanksPage() {
   });
 
   const setDefaultMutation = useMutation({
-    mutationFn: accountBanksApi.setDefault,
+    mutationFn: accountBanksSheets.setDefault,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['account-banks'] });
       messageApi.success('Đã cập nhật tài khoản mặc định');
@@ -48,7 +48,7 @@ export default function AccountBanksPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: accountBanksApi.remove,
+    mutationFn: accountBanksSheets.remove,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['account-banks'] });
       messageApi.success('Xóa account bank thành công');

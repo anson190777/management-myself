@@ -31,9 +31,23 @@ export const ROOM_COLUMNS: SheetColumnMapping[] = [
   { key: 'billSheetName', header: 'Sheet hóa đơn', type: 'string' },
 ];
 
+export const ACCOUNT_BANKS_SHEET_NAME = 'account_banks';
+
+export const ACCOUNT_BANK_COLUMNS: SheetColumnMapping[] = [
+  { key: '_id', header: 'ID', type: 'string' },
+  { key: 'customerCode', header: 'Mã khách hàng', type: 'string' },
+  { key: 'customerName', header: 'Tên khách hàng', type: 'string' },
+  { key: 'bank', header: 'Ngân hàng', type: 'string' },
+  { key: 'accountNumber', header: 'Số tài khoản', type: 'string' },
+  { key: 'isDefault', header: 'Mặc định', type: 'boolean' },
+  { key: 'createdAt', header: 'Ngày tạo', type: 'string' },
+  { key: 'updatedAt', header: 'Ngày cập nhật', type: 'string' },
+];
+
 export const ROOM_BILL_COLUMNS: SheetColumnMapping[] = [
   { key: '_id', header: 'ID', type: 'string' },
   { key: 'roomId', header: 'Room ID', type: 'string' },
+  { key: 'roomName', header: 'Tên phòng', type: 'string' },
   { key: 'billingMonth', header: 'Tháng', type: 'string' },
   { key: 'electricityOldReading', header: 'Điện cũ', type: 'number' },
   { key: 'electricityNewReading', header: 'Điện mới', type: 'number' },
@@ -62,6 +76,13 @@ export const googleSheetsConfig = {
       sheetName: ROOMS_SHEET_NAME,
       headerRow: 1,
       columns: ROOM_COLUMNS,
+    } satisfies GoogleSheetDefinition,
+    accountBanks: {
+      id: 'accountBanks',
+      spreadsheetId: GOOGLE_DATA_SPREADSHEET_ID,
+      sheetName: ACCOUNT_BANKS_SHEET_NAME,
+      headerRow: 1,
+      columns: ACCOUNT_BANK_COLUMNS,
     } satisfies GoogleSheetDefinition,
   },
 } as const;

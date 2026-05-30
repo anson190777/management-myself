@@ -26,6 +26,7 @@ export const mapRowToRoomBill = (row: RoomBillSheetRow, room?: Room): RoomBill =
   return {
     _id: String(row._id ?? ''),
     roomId: room ?? roomId,
+    roomName: String(row.roomName ?? room?.name ?? ''),
     billingMonth: String(row.billingMonth ?? ''),
     electricityOldReading: Number(row.electricityOldReading ?? 0),
     electricityNewReading: Number(row.electricityNewReading ?? 0),
@@ -47,14 +48,17 @@ export const mapRowToRoomBill = (row: RoomBillSheetRow, room?: Room): RoomBill =
 };
 
 export const mapRoomBillToRow = (bill: Partial<RoomBill>): Record<string, unknown> => {
-  const roomId =
+  const room =
     typeof bill.roomId === 'object' && bill.roomId && '_id' in bill.roomId
-      ? (bill.roomId as Room)._id
-      : bill.roomId;
+      ? (bill.roomId as Room)
+      : undefined;
+  const roomId = room?._id ?? bill.roomId;
+  const roomName = bill.roomName ?? room?.name ?? '';
 
   return {
     _id: bill._id,
     roomId,
+    roomName,
     billingMonth: bill.billingMonth,
     electricityOldReading: bill.electricityOldReading,
     electricityNewReading: bill.electricityNewReading,

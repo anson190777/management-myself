@@ -28,9 +28,8 @@ import dayjs from 'dayjs';
 import html2canvas from 'html2canvas';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { accountBanksApi } from '../api/accountBanks.api';
-import GoogleSheetsGuard from '../components/google/GoogleSheetsGuard';
-import { roomBillsSheets } from '../lib/sheets/roomBillsSheets';
+import { accountBanksSheets } from '../lib/sheets/accountBanksSheets';
+import { roomBillsSheets, resetRoomBillsSheetsTabCache } from '../lib/sheets/roomBillsSheets';
 import { roomsSheets } from '../lib/sheets/roomsSheets';
 import { buildVietQrImageUrlFromAccountBank } from '../lib/vietQr';
 import { formatCurrencyVnd } from '../utils/format';
@@ -59,10 +58,25 @@ const vndParser = (value: string | undefined) => {
   return Number(String(value).replace(/\D/g, ''));
 };
 
+const CURRENT_YEAR = dayjs().format('YYYY');
+
+const buildYearOptions = () => {
+  const endYear = dayjs().year() + 1;
+  const startYear = 2024;
+  const years: { value: string; label: string }[] = [];
+  for (let year = endYear; year >= startYear; year -= 1) {
+    years.push({ value: String(year), label: String(year) });
+  }
+  return years;
+};
+
+const YEAR_OPTIONS = buildYearOptions();
+
 export default function RoomBillsPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const [filters, setFilters] = useState({
     roomId: undefined as string | undefined,
+    billingYear: CURRENT_YEAR,
     billingMonth: undefined as string | undefined,
     page: 1,
     limit: 20,
@@ -87,14 +101,16 @@ export default function RoomBillsPage() {
   });
 
   const roomBillsQuery = useQuery({
-    queryKey: ['room-bills', filters.roomId, filters.billingMonth, filters.page],
+    queryKey: ['room-bills', filters.roomId, filters.billingYear, filters.billingMonth, filters.page],
     queryFn: () =>
       roomBillsSheets.getRoomBills({
         roomId: filters.roomId,
+        billingYear: filters.billingYear,
         billingMonth: filters.billingMonth,
         page: filters.page,
         limit: filters.limit,
       }),
+    enabled: Boolean(filters.roomId),
   });
 
   const createMutation = useMutation({
@@ -123,11 +139,43 @@ export default function RoomBillsPage() {
   const roomBills = useMemo(() => roomBillsQuery.data?.items ?? [], [roomBillsQuery.data]);
   const roomBillsPagination = roomBillsQuery.data?.pagination;
 
+  useEffect(() => {
+    const syncSheets = async () => {
+      try {
+        const result = await roomBillsSheets.migrateLegacySheets();
+        if (result.movedRows > 0 || result.deletedLegacySheets.length > 0) {
+          resetRoomBillsSheetsTabCache();
+        }
+
+        const backfill = await roomBillsSheets.syncRoomNamesInBillSheets();
+        if (backfill.updated > 0) {
+          resetRoomBillsSheetsTabCache();
+          void queryClient.invalidateQueries({ queryKey: ['room-bills'] });
+        }
+      } catch {
+        // Ignore when Google session is unavailable
+      }
+    };
+
+    void syncSheets();
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (rooms.length > 0 && !filters.roomId) {
+      setFilters((prev) => ({
+        ...prev,
+        roomId: rooms[0]._id,
+        page: 1,
+      }));
+    }
+  }, [rooms, filters.roomId]);
+
   const handleOpenCreate = () => {
     setEditingRecord(null);
     setSelectedRoomPricing(null);
     form.setFieldsValue({
-      billingMonth: dayjs(),
+      roomId: filters.roomId,
+      billingMonth: dayjs().year(Number(filters.billingYear)),
       otherFees: [],
     });
     setDrawerOpen(true);
@@ -287,7 +335,7 @@ export default function RoomBillsPage() {
         setPreviewTenantName(roomDetail?.nameUser ?? '');
       }
 
-      const data = await accountBanksApi.getDefault({ forceRefresh: true });
+      const data = await accountBanksSheets.getDefault();
       if (!data) {
         throw new Error('Không có thông tin account bank để tạo mã QR');
       }
@@ -445,7 +493,7 @@ export default function RoomBillsPage() {
   }, [previewRecord, defaultAccountBank, roomMap]);
 
   return (
-    <GoogleSheetsGuard>
+    <>
       {contextHolder}
       <Card
         title="Quản lý Room Bills"
@@ -463,8 +511,8 @@ export default function RoomBillsPage() {
         <Space wrap style={{ marginBottom: 16 }}>
           <Select
             style={{ width: 220 }}
-            placeholder="Lọc theo phòng"
-            allowClear
+            placeholder="Chọn phòng"
+            value={filters.roomId}
             options={rooms.map((room: any) => ({
               value: room._id,
               label: room.name,
@@ -477,9 +525,24 @@ export default function RoomBillsPage() {
               }))
             }
           />
+          <Select
+            style={{ width: 120 }}
+            placeholder="Năm"
+            value={filters.billingYear}
+            options={YEAR_OPTIONS}
+            onChange={(value) =>
+              setFilters((prev) => ({
+                ...prev,
+                billingYear: value,
+                billingMonth: undefined,
+                page: 1,
+              }))
+            }
+          />
           <DatePicker
             picker="month"
             placeholder="Lọc theo tháng"
+            value={filters.billingMonth ? dayjs(filters.billingMonth, 'YYYY-MM') : null}
             onChange={(value) =>
               setFilters((prev) => ({
                 ...prev,
@@ -776,6 +839,6 @@ export default function RoomBillsPage() {
           </div>
         )}
       </Modal>
-    </GoogleSheetsGuard>
+    </>
   );
 }
