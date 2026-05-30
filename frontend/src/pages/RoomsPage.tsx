@@ -24,7 +24,7 @@ import {
 } from 'antd';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { roomsApi } from '../api/rooms.api';
+import { roomsSheets } from '../lib/sheets/roomsSheets';
 import { formatCurrencyVnd } from '../utils/format';
 
 const initialFormValues = {
@@ -68,11 +68,11 @@ export default function RoomsPage() {
 
   const roomsQuery = useQuery({
     queryKey: ['rooms', page],
-    queryFn: () => roomsApi.getRooms({ page, limit: 20 }),
+    queryFn: () => roomsSheets.getRooms({ page, limit: 20 }),
   });
 
   const createMutation = useMutation({
-    mutationFn: roomsApi.createRoom,
+    mutationFn: roomsSheets.createRoom,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['rooms'] });
       messageApi.success('Tạo phòng thành công');
@@ -83,7 +83,7 @@ export default function RoomsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: roomsApi.updateRoom,
+    mutationFn: roomsSheets.updateRoom,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['rooms'] });
       messageApi.success('Cập nhật phòng thành công');
@@ -95,7 +95,7 @@ export default function RoomsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: roomsApi.deleteRoom,
+    mutationFn: roomsSheets.deleteRoom,
     onSuccess: async (_: unknown, roomId: string) => {
       await queryClient.invalidateQueries({ queryKey: ['rooms'] });
       if (selectedRoomId === roomId) {

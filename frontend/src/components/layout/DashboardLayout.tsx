@@ -10,6 +10,7 @@ import {
 import { Button, Layout, Menu, Typography } from 'antd';
 import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import GoogleConnectionButton from '../google/GoogleConnectionButton';
 
 const { Header, Sider, Content } = Layout;
 
@@ -109,6 +110,7 @@ export default function DashboardLayout() {
               {routeTitleMap[location.pathname] ?? 'Dashboard'}
             </Typography.Title>
           </div>
+          <GoogleConnectionButton />
         </Header>
         <Content className="app-content">
           <Outlet />
