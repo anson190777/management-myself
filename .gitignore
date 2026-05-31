@@ -10,3 +10,15 @@ dist/
 **/dist/
 
 .DS_Store
+
+# Build artifacts (local only — rebuild on machine)
+build/
+**/build/
+
+# Flutter mobile
+mobile/.dart_tool/
+mobile/build/
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/android/.gradle/
+mobile/lib/config/google_config.dart
